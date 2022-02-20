@@ -1,0 +1,115 @@
+syntax = "proto3";
+
+package swapwallet;
+
+option go_package = "github.com/sputn1ck/swapwallet/swaprpc";
+
+
+service SwapService {
+  rpc GetRates(GetRatesRequest) returns (GetRatesResponse);
+  rpc SendPayment(stream SendPaymentRequest) returns (stream SendPaymentResponse);
+  rpc ReceivePayment(stream ReceivePaymentRequest) returns (stream ReceivePaymentResponse);
+}
+
+message GetRatesRequest {
+
+}
+
+message GetRatesResponse{
+  repeated AssetInfo asset_infos = 1;
+  float fee = 2;
+}
+
+message AssetInfo {
+  string name = 1;
+  float exchange_rate = 2;
+  float premium_per_sat = 3;
+}
+
+message ServerTerms {
+  float fee_per_sat = 1;
+  uint32 flat_base_fee = 2;
+  uint32 pay_confs_required = 3;
+}
+
+message ReceivePaymentRequest{
+  string payment_id = 1;
+  oneof message {
+    ReceiveRequestMessage receive_request = 2;
+    CancelMessage cancel = 3;
+  }
+}
+
+message ReceivePaymentResponse{
+  string payment_id = 1;
+  oneof message {
+    WaitForPaymentMessage wait_for_payment = 2;
+    CompleteMessage complete = 3;
+  }
+}
+
+message ReceiveRequestMessage {
+  bytes payment_hash = 1;
+  bytes pubkey_hash = 2;
+  uint64 amount = 3;
+  string asset = 4;
+}
+
+message CancelMessage {
+    string reason = 1;
+}
+
+
+
+message WaitForPaymentMessage {
+  string invoice = 1;
+  string tx_hex = 2;
+  bytes pubkey_hash = 3;
+  uint32 csv = 4;
+}
+
+message CompleteMessage {
+  string status = 1;
+}
+
+message SendPaymentRequest{
+  string payment_id = 1;
+  oneof message {
+    PaymentRequestmessage payment_request = 2;
+    TxMessage tx = 3;
+    CancelMessage cancel = 4;
+  }
+}
+
+message SendPaymentResponse{
+  string payment_id = 1;
+  oneof message {
+    PayAgreementMessage pay_agreement = 2;
+    PayCompletedMessage pay_completed = 3;
+  }
+}
+
+message PaymentRequestmessage {
+  bytes payment_hash = 1;
+  bytes pubkey_hash = 2;
+  string invoice = 3;
+  string asset = 4;
+}
+message TxMessage {
+  string tx_id = 1;
+}
+
+
+
+message PayAgreementMessage {
+  string pubkey_hash = 1;
+  uint32 csv = 2;
+  uint64 onchain_pay_amount = 3;
+}
+message PayCompletedMessage {
+  string preimage = 1;
+  string cancel_reason = 2;
+}
+
+
+
