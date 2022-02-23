@@ -35,8 +35,9 @@ message ServerTerms {
 message ReceivePaymentRequest{
   string payment_id = 1;
   oneof message {
-    ReceiveRequestMessage receive_request = 2;
-    CancelMessage cancel = 3;
+    StartReceiveMessage start_receive = 2;
+    PreimageMessage preimage_message = 3;
+    CancelMessage cancel = 4;
   }
 }
 
@@ -44,32 +45,37 @@ message ReceivePaymentResponse{
   string payment_id = 1;
   oneof message {
     WaitForPaymentMessage wait_for_payment = 2;
-    CompleteMessage complete = 3;
+    TxOpenedMessage tx_opened = 3;
   }
 }
 
-message ReceiveRequestMessage {
+message StartReceiveMessage {
   bytes payment_hash = 1;
-  bytes pubkey_hash = 2;
+  bytes taker_pubkey = 2;
   uint64 amount = 3;
   string asset = 4;
+  string address = 5;
+}
+
+message TxOpenedMessage {
+  string tx_id = 1;
+  string tx_hex = 2;
+  uint32 script_vout = 3;
+  bytes maker_pubkey = 4;
+  uint32 csv = 5;
 }
 
 message CancelMessage {
-    string reason = 1;
+  string reason = 1;
 }
-
-
 
 message WaitForPaymentMessage {
   string invoice = 1;
-  string tx_hex = 2;
-  bytes pubkey_hash = 3;
-  uint32 csv = 4;
+  string swap_id = 2;
 }
 
-message CompleteMessage {
-  string status = 1;
+message PreimageMessage {
+  bytes preimage = 1;
 }
 
 message SendPaymentRequest{
@@ -91,7 +97,7 @@ message SendPaymentResponse{
 
 message PaymentRequestmessage {
   bytes payment_hash = 1;
-  bytes pubkey_hash = 2;
+  bytes maker_pubkey = 2;
   string invoice = 3;
   string asset = 4;
 }
@@ -102,7 +108,7 @@ message TxMessage {
 
 
 message PayAgreementMessage {
-  string pubkey_hash = 1;
+  string taker_pubkey = 1;
   uint32 csv = 2;
   uint64 onchain_pay_amount = 3;
 }

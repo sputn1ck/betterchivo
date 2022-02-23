@@ -5,6 +5,7 @@ import (
 	"github.com/btcsuite/btcd/txscript"
 )
 
+const SWAP_CSV = 30
 // returns the swap script miniscript: or(and(pk(taker),sha256(paymentHash)),and(pk(maker),older(csv)))
 func GetSwapScript(makerPkHash []byte, takerPkHash []byte, paymentHash []byte, csv uint32) ([]byte, error ){
 	return txscript.NewScriptBuilder().
