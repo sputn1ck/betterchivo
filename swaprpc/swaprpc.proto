@@ -53,16 +53,14 @@ message StartReceiveMessage {
   bytes payment_hash = 1;
   bytes taker_pubkey = 2;
   uint64 amount = 3;
-  string asset = 4;
-  string address = 5;
+  bytes asset = 4;
 }
 
 message TxOpenedMessage {
   string tx_id = 1;
-  string tx_hex = 2;
-  uint32 script_vout = 3;
-  bytes maker_pubkey = 4;
-  uint32 csv = 5;
+  bytes maker_pubkey = 2;
+  uint32 csv = 3;
+  string tx_hex = 4;
 }
 
 message CancelMessage {

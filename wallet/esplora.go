@@ -49,7 +49,6 @@ func (e *EsploraUtxo) Index() uint32 {
 }
 
 func (e *EsploraUtxo) Value() btcutil.Amount {
-	//amt, _ := btcutil.NewAmount(float64(e.SatAmt))
 	amt, _ := btcutil.NewAmount(float64(e.SatAmt))
 	return amt
 }
@@ -301,16 +300,13 @@ func (l *LiquidWallet) SendToAddress(address string, asset string, value uint64)
 
 	var txInputs []*transaction.TxInput
 	var inputSigner []*hdkeychain.ExtendedKey
+
 	for _,v := range inputs {
 		txInputs = append(txInputs, EsploraUtxoToTxInput(v))
 		key, err := l.unblindedAddrKey.Derive(l.addressToUtxoMap[v.Address].Derivation)
 		if err != nil {
 			return "", err
 		}
-		//privkey, err := key.ECPrivKey()
-		//if err != nil {
-		//	return "", err
-		//}
 
 		inputSigner = append(inputSigner, key)
 	}
@@ -427,7 +423,7 @@ func (l *LiquidWallet) GetInputs(asset string, value uint64) ([]*EsploraUtxo,uin
 	}
 	var coins []coinset.Coin
 	for _,v := range l.utxos {
-		if paymentType,err := GetPaymentType(v.Address); err != nil || paymentType != elemaddr.P2WpkhScript {
+		if paymentType,err := GetPaymentType(v.Address); err != nil || paymentType != elemaddr.P2WpkhScript || v.Asset != asset {
 			continue
 		}
 		coins = append(coins, v)

@@ -1,11 +1,13 @@
 package main
 
 import (
-	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/btcsuite/btcd/btcec"
-	"github.com/sputn1ck/liquid-go-lightwallet/lightning"
+	"github.com/sputn1ck/liquid-go-lightwallet/chain"
+	"github.com/sputn1ck/liquid-go-lightwallet/swap"
+	"github.com/sputn1ck/liquid-go-lightwallet/wallet"
+	"github.com/vulpemventures/go-elements/network"
 	"google.golang.org/grpc"
 	"log"
 	"os"
@@ -14,19 +16,61 @@ import (
 	"github.com/sputn1ck/liquid-go-lightwallet/swaprpc"
 )
 
-var usdt = "asdf"
+var liquidNetwork = &network.Regtest
+
+var usdt = "2dcf5a8834645654911964ec3602426fd3b9b4017554d3f9c19403e7fc1411d3"
+
+var seed = "blossom must cherry inform whale steak wish raw arm among run dog middle animal horse history sustain extra trend walnut orchard grass bid caution"
+
+var helpMsg = "you need to provice a command (newaddress, sendtoaddress, receive 'amt in usdt'"
 
 func main() {
-	if err := run(); err != nil {
-		log.Printf("Error: %v", err)
+	if len(os.Args) < 2 {
+		log.Printf(helpMsg)
+		return
 	}
+
+	switch os.Args[1] {
+	case "receive":
+		if err := receive(); err != nil {
+			log.Printf("Error: %v", err)
+		}
+	case "newaddress":
+		if err := getAddress(); err != nil {
+			log.Printf("Error: %v", err)
+		}
+	default:
+		log.Printf(helpMsg)
+	}
+
+
 }
 
-func run() error {
-	if len(os.Args) < 2 {
+func getAddress() error {
+	rpcClient, err := wallet.NewElementsdClient("localhost:18884", "admin1","123")
+	if err != nil {
+		return err
+	}
+
+	liquidWallet,err := wallet.NewRpcWallet(rpcClient, "betterchivo-server")
+	if err != nil {
+		return err
+	}
+	address, err := liquidWallet.GetAddress()
+	if err != nil {
+		return err
+	}
+	log.Printf("%s", address)
+	return nil
+}
+
+
+
+func receive() error {
+	if len(os.Args) < 3 {
 		return errors.New("expected amount ")
 	}
-	amount, err := strconv.Atoi(os.Args[1])
+	amount, err := strconv.Atoi(os.Args[2])
 	if err != nil {
 		return err
 	}
@@ -39,14 +83,26 @@ func run() error {
 
 	psClient := swaprpc.NewSwapServiceClient(conn)
 
-	dummyWallet := &DummyWallet{}
-
-	bcc := &BetterChivoClient{
-		rpc:    psClient,
-		wallet: dummyWallet,
+	rpcClient, err := wallet.NewElementsdClient("localhost:18884", "admin1","123")
+	if err != nil {
+		return err
 	}
 
-	err = bcc.receiveUsdt(uint64(amount))
+	liquidWallet,err := wallet.NewRpcWallet(rpcClient, "betterchivo-server")
+	if err != nil {
+		return err
+	}
+
+	blockchain := chain.NewLiquidOnchain(liquidNetwork)
+
+	bcc := swap.NewBetterChivoClient(psClient, liquidWallet, blockchain)
+
+	usdtBytes, err := hex.DecodeString(usdt)
+	if err != nil {
+		return err
+	}
+
+	err = bcc.ReceiveUsdt(uint64(amount), blockchain.TranslateAsset(usdtBytes))
 	if err != nil {
 		return err
 	}
@@ -73,130 +129,5 @@ func getClientConn(address string) (*grpc.ClientConn, error) {
 }
 
 
-type BetterChivoClient struct {
-	rpc swaprpc.SwapServiceClient
-	wallet Wallet
-}
 
 
-func (client *BetterChivoClient) receiveUsdt(amount uint64) error{
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-    // create claim key
-	privkey, err := btcec.NewPrivateKey(btcec.S256())
-	if err != nil {
-		return err
-	}
-	pubkey := privkey.PubKey().SerializeCompressed()
-
-	// create preimage
-	preimage, err := lightning.GetPreimage()
-	if err != nil {
-		return err
-	}
-
-	phash := preimage.Hash()
-	// get address
-	address := client.wallet.GetNewAddress()
-	// get asset
-
-	// send request
-
-	stream, err := client.rpc.ReceivePayment(ctx)
-	if err != nil {
-		return err
-	}
-
-	// send request
-	msg := &swaprpc.ReceivePaymentRequest{
-		Message: &swaprpc.ReceivePaymentRequest_StartReceive{&swaprpc.StartReceiveMessage{
-			PaymentHash: phash[:],
-			TakerPubkey:  pubkey,
-			Amount:      amount,
-			Asset:       usdt,
-			Address: address,
-		}},
-	}
-	err = stream.Send(msg)
-	if err != nil {
-		return err
-	}
-
-	// wait for waitforpayment message
-	res, err := stream.Recv()
-	if err != nil {
-		return err
-	}
-
-	waitForPayment := res.GetWaitForPayment()
-	if waitForPayment == nil {
-		return errors.New("expected wait for payment message")
-	}
-
-	// now we show the invoice
-	log.Printf("Invoice: %s", waitForPayment.Invoice)
-
-	// now we wait for the txopened message
-	res, err = stream.Recv()
-	if err != nil {
-		return err
-	}
-
-	txopened := res.GetTxOpened()
-	if txopened == nil {
-		return errors.New("expected wait for payment message")
-	}
-
-	// we now claim the tx
-	swapParams := NewPreimageClaimParams(txopened.MakerPubkey, pubkey, txopened.Csv,preimage[:], phash[:], privkey)
-	txId, err := client.wallet.ClaimSwap(swapParams)
-	if err != nil {
-		return err
-	}
-
-	log.Printf("claimed swap: %s", txId)
-
-	msg = &swaprpc.ReceivePaymentRequest{
-		Message: &swaprpc.ReceivePaymentRequest_PreimageMessage{&swaprpc.PreimageMessage{
-			Preimage: preimage[:],
-		}},
-	}
-
-	err = stream.Send(msg)
-	if err != nil {
-		return err
-	}
-
-	log.Printf("swap completed, received %v of %s", amount, usdt)
-	return nil
-}
-
-type Wallet interface {
-	GetNewAddress() string
-	ClaimSwap(claimParams PreimageClaimParams) (string, error)
-}
-
-type PreimageClaimParams struct {
-	makerPubkey []byte
-	takerPubkey []byte
-	csv uint32
-	preimage []byte
-	phash []byte
-	signingKey *btcec.PrivateKey
-}
-
-func NewPreimageClaimParams(makerPubkey []byte, takerPubkey []byte, csv uint32, preimage []byte, phash []byte, signingKey *btcec.PrivateKey) PreimageClaimParams {
-	return PreimageClaimParams{makerPubkey: makerPubkey, takerPubkey: takerPubkey, csv: csv, preimage: preimage, phash: phash, signingKey: signingKey}
-}
-
-
-type DummyWallet struct {}
-
-func (d DummyWallet) GetNewAddress() string {
-	return "address"
-}
-
-func (d DummyWallet) ClaimSwap(claimParams PreimageClaimParams) (string, error) {
-	return "txid", nil
-}
