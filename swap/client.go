@@ -104,7 +104,7 @@ func (client *BetterChivoClient) ReceiveUsdt(amount uint64, asset []byte) error{
 	if err != nil {
 		return err
 	}
-	log.Printf("maker pubkey: %x, takerpubkey: %x", txopened.MakerPubkey, pubkey)
+	log.Printf("maker pubkey: %x, takerpubkey: %x paymenthash %x", txopened.MakerPubkey, pubkey, phash[:])
 
 	swapParams := chain.NewClaimParams(txopened.TxHex,address, amount, txopened.Csv,txopened.MakerPubkey, pubkey,preimage[:], phash[:],asset, privkey)
 	claimTxHex, err := client.chain.CreatePreimageSpendingTransaction(swapParams)

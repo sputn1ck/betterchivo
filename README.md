@@ -1,6 +1,5 @@
-steamwallet
-var marinaseed = "sick dile mma lab pen alpha twice sudden broccoli soap advance punch angry"
+# BetterChivo
 
-Receive
 
-Create a preimage 
+BetterChivo is a PoC liquid wallet that allows users to trustlessly receive and send liquid assets over lightning payments.
+

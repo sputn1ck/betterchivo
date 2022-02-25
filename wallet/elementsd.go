@@ -2,6 +2,7 @@ package wallet
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/ybbus/jsonrpc"
@@ -87,16 +88,34 @@ func (e *ElementsdClient) SendToAddress(address string, asset string, amount str
 }
 
 type BalanceRes struct {
-	Bitcoin float64 `json:"bitcoin"`
+	Assets map[string]float64 `json:"bitcoin"`
 }
-func (e *ElementsdClient) GetBalance(asset string) (uint64, error) {
-	var balanceRes *BalanceRes
-	err := e.Rpc.CallFor(&balanceRes, "getbalance")
+func (e *ElementsdClient) GetBalance(asset string) (float64, error) {
+	//var balanceRes *BalanceRes
+	res, err := e.Rpc.Call("getbalance")
 	if err != nil {
-		return 0,err
+		return 0, err
 	}
-	// todo correct balance stuff
-	return 0, nil
+	if res.Error != nil {
+		return 0, res.Error
+	}
+
+
+	balanceMap := res.Result.(map[string]interface{})
+	var val interface{}
+	var ok bool
+
+	if val, ok = balanceMap[asset]; !ok {
+		return 0, nil
+	}
+	var number json.Number
+	if number, ok = val.(json.Number); !ok {
+		return 0,nil
+	}
+
+
+
+	return number.Float64()
 }
 
 type WalletRes struct {
@@ -245,7 +264,7 @@ func (r *ElementsRpcWallet) setupWallet() error {
 }
 
 // GetBalance returns the balance in sats
-func (r *ElementsRpcWallet) GetBalance(asset string) (uint64, error) {
+func (r *ElementsRpcWallet) GetBalance(asset string) (float64, error) {
 	balance, err := r.rpcClient.GetBalance(asset)
 	if err != nil {
 		return 0, err

@@ -31,7 +31,7 @@ func GetChainCfgParams(liquidNetwork *network.Network, chaincfg *chaincfg.Params
 
 // GetOpeningTxScript returns the script for the opening transaction of a swap,
 // where the taker is the peer paying the invoice and the maker the peer providing the lbtc
-func GetSwapScript(takerPubkeyHash []byte, makerPubkeyHash []byte, pHash []byte, csv uint32) ([]byte, error) {
+func GetOpeningTxScript(takerPubkeyHash []byte, makerPubkeyHash []byte, pHash []byte, csv uint32) ([]byte, error) {
 	script := txscript.NewScriptBuilder().
 		AddData(makerPubkeyHash).
 		AddOp(txscript.OP_CHECKSIG).
@@ -54,6 +54,20 @@ func GetSwapScript(takerPubkeyHash []byte, makerPubkeyHash []byte, pHash []byte,
 		AddOp(txscript.OP_ENDIF)
 	return script.Script()
 }
+
+// GetPreimageWitness returns the witness for spending the transaction with the preimage
+func GetPreimageWitness(signature, preimage, redeemScript []byte) [][]byte {
+	sigWithHashType := append(signature, byte(txscript.SigHashAll))
+	witness := make([][]byte, 0)
+	//log.Printf("%s, \n %s,\n %s", hex.EncodeToString(sigWithHashType), hex.EncodeToString(preimage), hex.EncodeToString(redeemScript))
+	witness = append(witness, sigWithHashType)
+	witness = append(witness, preimage[:])
+	witness = append(witness, []byte{})
+	witness = append(witness, []byte{})
+	witness = append(witness, redeemScript)
+	return witness
+}
+
 
 func h2b(str string) []byte {
 	buf, _ := hex.DecodeString(str)

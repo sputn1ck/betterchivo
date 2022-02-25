@@ -39,6 +39,10 @@ func main() {
 		if err := getAddress(); err != nil {
 			log.Printf("Error: %v", err)
 		}
+	case "balance":
+		if err := getBalance(); err != nil {
+			log.Printf("Error: %v", err)
+		}
 	default:
 		log.Printf(helpMsg)
 	}
@@ -46,13 +50,30 @@ func main() {
 
 }
 
+func getBalance() error {
+	rpcClient, err := wallet.NewElementsdClient("localhost:18884", "admin1", "123")
+	if err != nil {
+		return err
+	}
+
+	liquidWallet, err := wallet.NewRpcWallet(rpcClient, "betterchivo-client")
+	if err != nil {
+		return err
+	}
+	balance, err := liquidWallet.GetBalance(usdt)
+	if err != nil {
+		return err
+	}
+	log.Printf("USDT Balance: %v", balance)
+	return nil
+}
 func getAddress() error {
 	rpcClient, err := wallet.NewElementsdClient("localhost:18884", "admin1","123")
 	if err != nil {
 		return err
 	}
 
-	liquidWallet,err := wallet.NewRpcWallet(rpcClient, "betterchivo-server")
+	liquidWallet,err := wallet.NewRpcWallet(rpcClient, "betterchivo-client")
 	if err != nil {
 		return err
 	}
@@ -88,7 +109,7 @@ func receive() error {
 		return err
 	}
 
-	liquidWallet,err := wallet.NewRpcWallet(rpcClient, "betterchivo-server")
+	liquidWallet,err := wallet.NewRpcWallet(rpcClient, "betterchivo-client")
 	if err != nil {
 		return err
 	}

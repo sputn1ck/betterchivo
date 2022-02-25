@@ -54,7 +54,7 @@ type AssetAmountTuple struct {
 }
 
 func (s *SwapOpeningParams) ToTxScript() ([]byte, error) {
-	return GetSwapScript(s.makerPubkey,s.takerPubkey, s.phash, s.csv)
+	return GetOpeningTxScript(s.takerPubkey,s.makerPubkey, s.phash, s.csv)
 }
 
 
@@ -123,13 +123,13 @@ func (l *LiquidOnchain) CreatePreimageSpendingTransaction(params ClaimParams) (s
 	}
 
 	// get script vouts
-	redeemScript, err := GetSwapScript(params.makerPubkey, params.takerPubkey, params.paymenthash, params.csv)
+	redeemScript, err := GetOpeningTxScript(params.takerPubkey, params.makerPubkey, params.paymenthash, params.csv)
 	if err != nil {
 		return "", err
 	}
 	log.Printf("redeem script %x", redeemScript)
 
-	lbtcVout, err := l.FindVout(firstTx.Outputs, redeemScript, l.GetAsset())
+	feeVout, err := l.FindVout(firstTx.Outputs, redeemScript, l.GetAsset())
 	if err != nil {
 		return "", err
 	}
@@ -145,13 +145,18 @@ func (l *LiquidOnchain) CreatePreimageSpendingTransaction(params ClaimParams) (s
 	txHash := firstTx.TxHash()
 
 	// add inputs
-	lbtcInput := transaction.NewTxInput(txHash[:], lbtcVout)
-	lbtcInput.Sequence = 0
+	feeInput := transaction.NewTxInput(txHash[:], feeVout)
+	feeInput.Sequence = 0
 
 	assetInput := transaction.NewTxInput(txHash[:], assetVout)
 	assetInput.Sequence = 0
 
-	spendingTx.Inputs = []*transaction.TxInput{lbtcInput, assetInput}
+	feeOutputInIndex := 0
+	assetOutputInIndex := 1
+
+	spendingTx.Inputs = make([]*transaction.TxInput, 2)
+	spendingTx.Inputs[feeOutputInIndex] = feeInput
+	spendingTx.Inputs[assetOutputInIndex] = assetInput
 
 
 	outputScript, err := address.ToOutputScript(params.redeemAddress)
@@ -160,32 +165,30 @@ func (l *LiquidOnchain) CreatePreimageSpendingTransaction(params ClaimParams) (s
 	}
 
 
-	feeOutput := transaction.NewTxOutput(l.GetAsset(), firstTx.Outputs[lbtcVout].Value, []byte{})
+	feeOutput := transaction.NewTxOutput(l.GetAsset(), firstTx.Outputs[feeVout].Value, []byte{})
 	assetOutput := transaction.NewTxOutput(params.asset, firstTx.Outputs[assetVout].Value, outputScript)
 
 	spendingTx.Outputs = make([]*transaction.TxOutput,2)
-	feeOutputInIndex := 0
-	assetOutputInIndex := 1
 	spendingTx.Outputs[feeOutputInIndex] = feeOutput
 	spendingTx.Outputs[assetOutputInIndex] = assetOutput
+
 	// create sigs and witnesses
 	assetSighash := spendingTx.HashForWitnessV0(assetOutputInIndex, redeemScript[:], firstTx.Outputs[assetVout].Value, txscript.SigHashAll)
+	feeSighash := spendingTx.HashForWitnessV0(feeOutputInIndex, redeemScript[:], firstTx.Outputs[feeVout].Value, txscript.SigHashAll)
 
 	assetSig, err := params.signingKey.Sign(assetSighash[:])
 	if err != nil {
 		return "", err
 	}
 
-	spendingTx.Inputs[assetOutputInIndex].Witness = GetPreimageWitness(assetSig.Serialize(), params.preimage, redeemScript)
-
-	lbtcSighash := spendingTx.HashForWitnessV0(feeOutputInIndex, redeemScript[:], firstTx.Outputs[lbtcVout].Value, txscript.SigHashAll)
-
-	lbtcSig, err := params.signingKey.Sign(lbtcSighash[:])
+	feeSig, err := params.signingKey.Sign(feeSighash[:])
 	if err != nil {
 		return "", err
 	}
 
-	spendingTx.Inputs[feeOutputInIndex].Witness = GetPreimageWitness(lbtcSig.Serialize(), params.preimage, redeemScript)
+
+	spendingTx.Inputs[assetOutputInIndex].Witness = GetPreimageWitness(assetSig.Serialize(), params.preimage, redeemScript)
+	spendingTx.Inputs[feeOutputInIndex].Witness = GetPreimageWitness(feeSig.Serialize(), params.preimage, redeemScript)
 
 	txHex, err := spendingTx.ToHex()
 	if err != nil {
@@ -229,15 +232,3 @@ func (l *LiquidOnchain) CreateOpeningAddress(redeemScript []byte) (string, error
 	return addr, nil
 }
 
-// GetPreimageWitness returns the witness for spending the transaction with the preimage
-func GetPreimageWitness(signature, preimage, redeemScript []byte) [][]byte {
-	sigWithHashType := append(signature, byte(txscript.SigHashAll))
-	witness := make([][]byte, 0)
-	//log.Printf("%s, \n %s,\n %s", hex.EncodeToString(sigWithHashType), hex.EncodeToString(preimage), hex.EncodeToString(redeemScript))
-	witness = append(witness, sigWithHashType)
-	witness = append(witness, preimage[:])
-	witness = append(witness, []byte{})
-	witness = append(witness, []byte{})
-	witness = append(witness, redeemScript)
-	return witness
-}

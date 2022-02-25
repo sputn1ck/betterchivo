@@ -16,9 +16,9 @@ const (
 )
 
 type LightningWallet interface {
-	CreateHodlInvoice(amount uint64) (string, error)
-	WaitforPaymentAccepted(invoice string) error
-	SettleInvoice(invoice string, preimage []byte) error
+	CreateHodlInvoice(pHash []byte, amount uint64) (string, error)
+	WaitforPaymentAccepted(pHash []byte) error
+	SettleInvoice(preimage []byte) error
 }
 
 type CurrencyConverter interface {
@@ -30,7 +30,7 @@ type SwapWallet interface {
 	SendToAddress(address string,  amount uint64, asset string) (string, error)
 	SendRawTransaction(txHex string) (string, error)
 	FundAndSignRawTransaction(unfundedRawTx string) (string, error)
-	GetBalance(asset string) (uint64, error)
+	GetBalance(asset string) (float64, error)
 }
 
 type OpeningTxCreator interface {
@@ -93,14 +93,14 @@ func (b *BetterChivoServer) ReceivePayment(server swaprpc.SwapService_ReceivePay
 	}
 
 	// Create Invoice
-	invoice, err := b.node.CreateHodlInvoice(satAmt)
+	invoice, err := b.node.CreateHodlInvoice(startReceiveRequest.PaymentHash, satAmt)
 	if err != nil {
 		return err
 	}
 
 	acceptedChan := make(chan error)
 	go func(){
-		err = b.node.WaitforPaymentAccepted(invoice)
+		err = b.node.WaitforPaymentAccepted(startReceiveRequest.PaymentHash)
 		acceptedChan<-err
 	}()
 
@@ -135,7 +135,7 @@ waitLoop:
 
 	log.Printf("[%s] Payment accepted", swapId)
 	// if payment has been accepted, we open the swap
-	log.Printf("maker pubkey: %x, takerpubkey: %x", pubkey, startReceiveRequest.TakerPubkey)
+	log.Printf("maker pubkey: %x, takerpubkey: %x, paymenthash %x", pubkey, startReceiveRequest.TakerPubkey, startReceiveRequest.PaymentHash)
 	openingParams := chain.NewSwapOpeningParams(pubkey, startReceiveRequest.TakerPubkey, SWAP_CSV, startReceiveRequest.PaymentHash,[]chain.AssetAmountTuple{{b.blockchain.GetAsset(),500},{startReceiveRequest.Asset, startReceiveRequest.Amount}})
 	unfinishedTxHex, err := b.blockchain.CreateUnfundedOpeningTransaction(openingParams)
 	if err != nil {
@@ -182,7 +182,7 @@ waitLoop:
 	}
 
 	log.Printf("[%s] Received invoice: %x",swapId, preimageMessage.Preimage)
-	err = b.node.SettleInvoice(invoice, preimageMessage.Preimage)
+	err = b.node.SettleInvoice(preimageMessage.Preimage)
 	if err != nil {
 		return err
 	}

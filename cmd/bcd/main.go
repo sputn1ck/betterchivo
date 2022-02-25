@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"github.com/sputn1ck/liquid-go-lightwallet/chain"
+	"github.com/sputn1ck/liquid-go-lightwallet/lightning"
 	"github.com/sputn1ck/liquid-go-lightwallet/swap"
 	"github.com/sputn1ck/liquid-go-lightwallet/swaprpc"
 	"github.com/sputn1ck/liquid-go-lightwallet/wallet"
@@ -16,6 +18,7 @@ import (
 
 var (
 	liquidNetwork = &network.Regtest
+	lndconnect = "lndconnect://127.0.0.1:10001?cert=MIICJzCCAc2gAwIBAgIRAM8SaqbghgiYTb5ZLIMNKiMwCgYIKoZIzj0EAwIwMTEfMB0GA1UEChMWbG5kIGF1dG9nZW5lcmF0ZWQgY2VydDEOMAwGA1UEAxMFYWxpY2UwHhcNMjIwMjI0MTQwNzAzWhcNMjMwNDIxMTQwNzAzWjAxMR8wHQYDVQQKExZsbmQgYXV0b2dlbmVyYXRlZCBjZXJ0MQ4wDAYDVQQDEwVhbGljZTBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABBSvPfCLcRu9xss932o44ezvdG9ObGAamzt4QHaeuYN2hq8tZ34BXTi1PC73lHyWdNNG4r2Vk-KXG_cFHhwMKmOjgcUwgcIwDgYDVR0PAQH_BAQDAgKkMBMGA1UdJQQMMAoGCCsGAQUFBwMBMA8GA1UdEwEB_wQFMAMBAf8wHQYDVR0OBBYEFK46_ewGBrWfwQz1rSUYqHCBR5FYMGsGA1UdEQRkMGKCBWFsaWNlgglsb2NhbGhvc3SCBWFsaWNlgg5wb2xhci1uMS1hbGljZYIEdW5peIIKdW5peHBhY2tldIIHYnVmY29ubocEfwAAAYcQAAAAAAAAAAAAAAAAAAAAAYcErBUABDAKBggqhkjOPQQDAgNIADBFAiEA5_TuZG9JXVWGwVjvWLhjzI-lwnkemC25JhumAMVVCZUCICEFm2JhhCumljkx5UGFM-Lhjr-ChmfyJ_jcrdQUzjCk&macaroon=AgEDbG5kAvgBAwoQrKvUd3mu8R0buI_mOrP-1RIBMBoWCgdhZGRyZXNzEgRyZWFkEgV3cml0ZRoTCgRpbmZvEgRyZWFkEgV3cml0ZRoXCghpbnZvaWNlcxIEcmVhZBIFd3JpdGUaIQoIbWFjYXJvb24SCGdlbmVyYXRlEgRyZWFkEgV3cml0ZRoWCgdtZXNzYWdlEgRyZWFkEgV3cml0ZRoXCghvZmZjaGFpbhIEcmVhZBIFd3JpdGUaFgoHb25jaGFpbhIEcmVhZBIFd3JpdGUaFAoFcGVlcnMSBHJlYWQSBXdyaXRlGhgKBnNpZ25lchIIZ2VuZXJhdGUSBHJlYWQAAAYgexb5fqA5XsR6_DcvO6my1xaRs8xXzhTeqcA85A-XPms"
 )
 
 func main() {
@@ -49,7 +52,13 @@ func run() error {
 			shutdown <- struct{}{}
 		}
 	}()
-
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	// set up lightning
+	lnd, err := lightning.NewLnd(ctx, lndconnect)
+	if err != nil {
+		return err
+	}
 	rpcClient, err := wallet.NewElementsdClient("localhost:18884", "admin1","123")
 	if err != nil {
 		return err
@@ -68,10 +77,9 @@ func run() error {
 	log.Printf("Server unblinded address: %s", unblindedAddr)
 
 	liquidChain := chain.NewLiquidOnchain(liquidNetwork)
-	dummyNode := &DummyLightningNode{}
 	dummyCC := &DummyCurrencyConverter{}
 
-	swapServer := swap.NewBetterChivoServer(liquidWallet, dummyNode,liquidChain,dummyCC)
+	swapServer := swap.NewBetterChivoServer(liquidWallet, lnd,liquidChain,dummyCC)
 	host := "localhost:42069"
 	lis, err := net.Listen("tcp", host)
 	if err != nil {
@@ -134,21 +142,6 @@ func run() error {
 
 
 
-
-type DummyLightningNode struct {
-}
-
-func (d *DummyLightningNode) CreateHodlInvoice(amount uint64) (string, error) {
-	return "invoice", nil
-}
-
-func (d *DummyLightningNode) WaitforPaymentAccepted(invoice string) (error) {
-	return nil
-}
-
-func (d *DummyLightningNode) SettleInvoice(invoice string, preimage []byte) error {
-	return nil
-}
 
 type DummyCurrencyConverter struct {}
 
